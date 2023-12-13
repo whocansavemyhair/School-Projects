@@ -1,0 +1,6 @@
+[submodule "cs-760"]
+	path = cs-760
+	url = https://github.com/whocansavemyhair/CS-760.git
+[submodule "stat-436"]
+	path = stat-436
+	url = https://github.com/whocansavemyhair/STAT-436.git

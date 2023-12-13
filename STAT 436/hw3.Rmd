@@ -1,0 +1,146 @@
+```{r}
+#Bike Demand
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(feasts)
+library(tidyverse)
+library(tsibble)
+library(plotly)
+library(slider)
+library(shiny)
+library(tsibbledata)
+theme_set(theme_bw())
+bike=read.csv("https://uwmadison.box.com/shared/static/f16jmkkskylfl1hnd5rpslzduja929g2.csv")
+```
+```{r}
+bike_plot=ggplot(bike,aes(x = hr, y = count, group = weekday)) +
+  geom_line() +
+  facet_wrap(~weekday)+
+  labs(x="Hour of Day",y="Bikeshare Demand (count)",title="Bikeshare Demand by Hour and Weekday")
+bike_plot
+```
+```{r}
+bike_summary <- bike %>%
+  group_by(yr, weekday, hr)%>%
+  summarize(q25 = quantile(count, 0.25), q75 = quantile(count, 0.75),.groups="drop")%>%
+  pivot_wider(names_from = yr, values_from = c(q25, q75), names_sep = "_year")%>%
+  left_join(bike, by = c("weekday", "hr"))
+bike_summary
+```
+```{r}
+bike_plot+
+  geom_ribbon(data = bike_summary, 
+              aes(x = hr, ymin = q25_year0, ymax = q75_year0, fill = "Year 1"), 
+              alpha = 0.3) +
+  geom_ribbon(data = bike_summary, 
+              aes(x = hr, ymin = q25_year1, ymax = q75_year1, fill = "Year 2"), 
+              alpha = 0.3) +
+  scale_fill_manual(values = c("Year 1" = "blue", "Year 2" = "red")) 
+```
+The final visualization displays the bike demand by hour and day of the week with colored areas representing the 25th and 75th percentiles of bike rides per hour for each year.Overall, bike demand is higher in the second year and the range of demand is generally wider for each hour and day. Rush hours in the morning and evening on weekdays exhibit a peak in bike demand.
+
+```{r}
+library(sf)
+library(tmap)
+library(tidyverse)
+library(ceramic)
+theme_set(theme_bw())
+library(tsibble)
+library(feasts)
+calf <- read.csv("https://uwmadison.box.com/shared/static/rduej9hsc4w3mdethxnx9ccv752f22yr.csv") %>%
+  filter(date != "2019 Feb") %>%
+  mutate(date = yearmonth(date)) %>%
+  as_tsibble(key = county, index = date)
+calf
+```
+```{r}
+trends <- calf %>%
+  features(calfresh, features = feature_set(tags = "trend")) 
+calf_trends <- calf %>%
+  left_join(trends,by="county")%>%
+  mutate(log_spikiness = log(spikiness))
+calf_trends
+```
+
+
+```{r}
+calf_trends%>%
+  group_by(county)%>%
+  slice_max(seasonal_strength_year,n=1)%>%
+  pull(county) -> highest_county
+
+calf_trends%>%
+  group_by(county)%>%
+  slice_min(seasonal_strength_year,n=1)%>%
+  pull(county) -> lowest_county
+top=calf_trends%>%filter(county %in% c(highest_county, lowest_county))
+top %>%
+  filter(county %in% c(highest_county, lowest_county)) %>%
+  ggplot(aes(x = date, y = calfresh,color=county)) +
+  geom_line() +
+  labs(title = "CalFresh Enrollment for Counties with Highest and Lowest Seasonal Strength",
+       x = "Date", y = "Enrollment")
+```
+    
+```{r}
+library(sf)
+counties <- read_sf("https://uwmadison.box.com/shared/static/gropucqxgqm82yhq13do1ws9k16dnxq7.geojson")
+calfresh_counties <- left_join(counties, calf_trends, by =  "county")
+calfresh_counties
+```
+```{r}
+ggplot(calfresh_counties) +
+  geom_sf(aes(fill = seasonal_strength_year)) +
+  scale_fill_viridis_c(name = "Seasonal Strength Year", option = "plasma", direction = -1) + 
+  theme_void() +
+  labs(title = "Seasonal Strength Year by County in California",
+       fill = "Seasonal Strength Year") 
+```
+
+For example, a scatter plot shows the relationship between CalFresh enrollment and a user-selected feature, such as county poverty rate. It answers questions like whether there are patterns between CalFresh enrollment and poverty rate. The users can use a brush tool or the filter to choose specific counties or a specific time period to explore real-time data patterns in the visualization. 
+
+```{r}
+library(ggraph)
+library(tidygraph)
+ edges <- read_csv("https://raw.githubusercontent.com/krisrs1128/stat679_code/main/activities/week10/political-books-edges.csv", col_types = "cci")
+    nodes <- read_csv("https://raw.githubusercontent.com/krisrs1128/stat679_code/main/activities/week10/political-books-nodes.csv", col_types = "ccc")
+
+graph <- tbl_graph(edges = edges, nodes = nodes) %>%
+  activate(nodes) %>%
+  mutate(political_ideology = factor(political_ideology))
+graph
+
+ggraph(graph,layout = "kk") + 
+  geom_edge_link() + 
+  geom_node_point(aes(color = political_ideology)) +
+  geom_node_label(aes(label = label), repel = TRUE) +
+  theme_void()
+```
+
+```{r}
+library(knitr)
+library(gridExtra)
+library(igraph)
+library(ggraph)
+library(tidygraph)
+theme_set(theme_graph())
+# Create adjacency matrix visualization
+ggraph(graph, "matrix") +
+  geom_edge_tile() +
+  coord_fixed()
+```
+The node-link diagram is often used to identify the most highly connected nodes in the network and if there are themes within the network. The adjacency matrix is useful for identifying patterns of connection between nodes. For example, it is easier to identify which books have many co-recommendations with each other and to compare the strength of the connections between different pairs of books. 
+
+```{r}
+rental=read.csv("https://uwmadison.box.com/shared/static/zi72ugnpku714rbqo2og9tv2yib5xped.csv")
+rental
+ggplot(rental,aes(longitude,latitude,color=room_type))+
+  geom_point()+
+   labs(title = "Airbnb rentals in Manhattan in 2019",
+       x = "Longitude", y = "Latitude",
+       color = "Room type")
+
+
+```
+

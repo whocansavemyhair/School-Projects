@@ -1,0 +1,191 @@
+---
+title: "Untitled"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r, echo = FALSE}
+knitr::opts_chunk$set(warnings = FALSE, message = FALSE)
+```
+
+```{r}
+library(tidyverse)
+library(shiny)
+```
+
+[Improving an app] Make the following apps more concise, modular, and
+readable by using reactive expressions to capture duplicated computation and /
+or externalizing complex computations into functions which are defined outside
+of the server.
+
+a. Program (a)
+
+```{r, eval = FALSE}
+
+f1 <- function(x) {
+  3*x^2 + 3
+}
+
+ui <- fluidPage(
+  titlePanel("Calculator"),
+  numericInput("x", "Enter the value of x", 0),
+  textOutput("f1"),
+  textOutput("f2"),
+  textOutput("f3")
+)
+
+server <- function(input, output) {
+  output$f1 <- renderText({ 3 * input$x ^ 2 + 3})
+  output$f2 <- renderText({ sqrt(3 * input$x ^ 2 + 3) - 5})
+  output$f3 <- renderText({ 30 * input$x ^ 2 + 30})
+}
+    
+shinyApp(ui, server)
+```
+
+b. Program (b)
+    
+```{r, eval = FALSE}
+penguins <- read_csv("https://uwmadison.box.com/shared/static/ijh7iipc9ect1jf0z8qa2n3j7dgem1gh.csv")
+islands <- unique(penguins$island)
+species <- unique(penguins$species)
+
+histogram <- function(df, varname) {
+    ggplot(df) +
+    geom_histogram(aes(col = "Island",.data[[varname]]))
+}
+
+ui <- fluidPage(
+  titlePanel("Penguins Plot"),
+  selectInput("species", "Species", species, multiple = TRUE),
+  selectInput("island", "Island", islands, multiple = TRUE),
+  selectInput("var1", "First Variable", colnames(penguins)[3:6]),
+  selectInput("var2", "Second Variable", colnames(penguins)[3:6]),
+  plotOutput("scatterplot"),
+  plotOutput("histogram1"),
+  plotOutput("histogram2"),
+)
+
+server <- function(input, output) {
+  current_data <- reactive({
+    penguins %>%
+      filter(
+        island %in% input$island,
+        species %in% input$species
+      )
+  })
+  
+  output$scatterplot <- renderPlot({
+    ggplot(current_data()) +
+      geom_point(aes(.data[[input$var1]], .data[[input$var2]]))
+  })
+  
+  output$histogram1 <- renderPlot(histogram(current_data(), input$var1))
+  
+  output$histogram2 <- renderPlot(histogram(current_data(), input$var2))
+  
+}
+
+shinyApp(ui, server)
+```
+
+
+[Interactive German Traffic] This problem will revisit the previous problem
+from an interactive point of view. We will build a visualization that helps
+users explore daily traffic patterns across multiple German cities, using
+interactivity to help users navigate the collection. We will need additional
+features related to the day of the week for each timepoint, created by the
+`wday` function below,
+
+```{r}
+library(tidyverse)
+library(lubridate)
+library(shiny)
+theme_set(theme_bw())
+traffic <- read_csv("https://uwmadison.box.com/shared/static/x0mp3rhhic78vufsxtgrwencchmghbdf.csv") %>%
+ mutate(day_of_week = wday(date))
+```
+```{r}
+traffic
+```
+
+a. Design and implement a Shiny app that allows users to visualize traffic
+over time across selected subsets of cities. Make sure that it is possible
+to view data from more than one city at a time. It is not necessary to label
+the cities within the associated figure.
+
+We first define a function that, when given a subset of cities, draws a line
+plot.
+
+```{r, eval = FALSE}
+plot_traffic <- function(df) {
+  ggplot(df) +
+    geom_line(aes(date, value, group = name)) +
+    labs(x = "Date", y = "Traffic") +
+    theme(axis.title = element_text(size = 20))
+}
+plot_traffic(traffic)
+```
+
+Our design will update a time series plot of all the cities every time a
+dropdown menu is updated. We will allow multiple cities to be selected
+simultaneously. Specifically, our UI has an input for choosing cities and
+displays the line plot as an output. Our server recognizes changes in the
+choice of cities, filters the data to that subset, and then draws the updated
+time series.
+    
+```{r, eval = FALSE}
+ui <- fluidPage(
+  selectInput("city", "City", unique(traffic$name), multiple = TRUE),
+  plotOutput("time_series")
+)
+server <- function(input, output) {
+  # fill this part in
+
+  output$time_series <- renderPlot({
+    if (length(input$city) == 0) {
+     return(plot_traffic(traffic))
+   }
+    
+    traffic %>%
+      filter(name %in% input$city) %>%
+      plot_traffic()
+  })
+}
+shinyApp(ui, server)
+```
+
+
+b. Introduce new inputs to allow users to select a contiguous range of days
+of the week. For example, the user should have a way of zooming into the
+samples taken within the Monday - Wednesday range.
+
+We use nearly the same design except that a new slider input is provided for
+choosing days of the week. When a range of days is chosen, then the time
+series will show only that range for the currently selected cities.
+
+```{r, eval = FALSE}
+ui <- fluidPage(
+  selectInput("city", "City", unique(traffic$name), multiple = TRUE),
+  sliderInput("day_of_week", "Days", 2, 7, c(2, 7)),
+  plotOutput("time_series")
+)
+server <- function(input, output) {
+  # fill this part in
+  output$time_series <- renderPlot({
+    traffic %>%
+      filter(
+        name %in% input$city,
+        day_of_week >= input$day_of_week[1],
+        day_of_week >= input$day_of_week[2],
+        ) %>%
+      plot_traffic()
+  })
+}
+shinyApp(ui, server)
+```
+
+c. Propose, but do not implement, at least one alternative strategy for
+supporting user queries from either part (a) or (b). What are the tradeoffs
+between the different approaches in terms of visual effectiveness and
+implementation complexity?

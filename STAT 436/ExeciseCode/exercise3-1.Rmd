@@ -1,0 +1,70 @@
+---
+title: "Untitled"
+output: html_document
+date: "2023-02-08"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warnings = FALSE, message = FALSE)
+library("tidyr")
+library("dplyr")
+library(ggplot2)
+```
+
+
+Exercise3-1
+
+import ikea data
+```{r}
+ikea <- read.csv("https://uwmadison.box.com/shared/static/iat31h1wjg7abhd2889cput7k264bdzd.csv") %>%
+          filter(category %in% c("Tables", "Bookcases", "Beds", "Cabinets", "Sofas", "Wardrobes"))
+ggplot(ikea) +
+  geom_histogram(aes(log(price)))
+```
+
+
+for problem 1:
+```{r}
+ggplot(ikea) +
+  geom_histogram(aes(log(price))) +
+  facet_grid(category ~ .)
+```
+problem 2
+```{r, fig.height=3,fig.width=6}
+ggplot(ikea) +
+  geom_histogram(aes(log(price))) +
+  facet_wrap(~category)
+```
+
+=
+problem 3
+```{r}
+ggplot(ikea) +
+  geom_histogram(aes(log(price))) +
+  facet_wrap(~ category, scales = "free_y")
+```
+
+
+
+
+
+
+
+
+d
+probem 4
+```{r}
+ggplot(ikea) +
+  geom_histogram(aes(log(price))) +
+  facet_wrap(~ category, axes = "separate")
+```
+
+
+
+problem 5
+```{r}
+ggplot(ikea) +
+  geom_histogram(aes(log(price))) +
+  facet_wrap(~ reorder(category, price))
+```
+

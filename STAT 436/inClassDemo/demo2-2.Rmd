@@ -1,0 +1,85 @@
+---
+title: "Untitled"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+
+{r, message = False}
+library(knitr)
+opts_chunk$set(message = False, warnings = False)
+
+%>%pipe syntax is to avoid storing intermediate computations.
+
+
+```{r}
+knitr::opts_chunk$set(warnings = FALSE, message = FALSE)
+```
+
+
+[Olympics Derivations] This problem gives some practice with deriving and visualizing new variables.
+
+```{r}
+olympics <- read.csv("https://uwmadison.box.com/shared/static/rzw8h2x6dp5693gdbpgxaf2koqijo12l.csv")
+olympics
+```
+
+a. Create new columns for the city and country of birth for each athlete in the
+London 2012 Olympics
+[dataset](https://uwmadison.box.com/s/rzw8h2x6dp5693gdbpgxaf2koqijo12l).
+
+```{r}
+colnames(olympics)
+```
+
+
+```{r}
+olympics %>%
+  mutate(city = str_split(`Place.of.birth`, "\\(")) %>%
+  dplyr::select(Name, `Place.of.birth`, city) %>%
+  unnest_wider(city, "_")%>%
+  select(-city_2)%>%
+  rename(city = city_1)
+
+```
+
+b. Compute the standard deviation of athlete age within each sport. Which sport
+has widest SD in age?
+
+```{r}
+olympics %>%
+  group_by(Sport) %>%
+  summarise(age_sd = sd(Age))
+  filter(age_sd == max(age_sd, na.rm = TRUE))
+```
+
+c. Make a visualization of sports against participant age. Sort sports by
+age variance.
+
+```{r}
+olympics_count <- olympics %>%
+  count(Sport)
+
+olympics %>%
+  left_join(olympics_count) %>%
+  filter(n > 4)
+  ggplot()+
+      geom_boxplot(aes(Age, reorder(Sport, Age, sd)))
+
+```
+
+
+```{r, fig.width=8, fig.height=10}
+ggplot(olympics) +
+  geom_boxplot(aes(Age, reorder(Sport, Age, sd)))
+```
+
+```{r}
+olympics %>%
+  group_by(Sport) %>%
+  mutate(n = n()) %>%
+  filter(n > 4) %>%
+  ggplot() +
+  geom_boxplot(aes())
+```
+

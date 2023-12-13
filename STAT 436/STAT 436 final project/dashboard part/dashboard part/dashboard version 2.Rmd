@@ -1,0 +1,243 @@
+---
+title: "milestone3"
+author:
+  - Group 13
+documentclass: ctexart
+keywords:
+  - 中文
+  - R Markdown
+output:
+  rticles::ctex:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+---
+
+```{r}
+library(ggplot2)
+library(shiny)
+library(tidyverse)
+library(ggrepel)
+library(plotly)
+library(treemapify)
+library(patchwork)
+library(RColorBrewer)
+```
+
+```{r}
+# loading files
+annual <- read.csv('annual.csv') %>%
+        group_by(year) %>%
+        reframe(code,
+                name,
+                amount,
+                percentage = 2*amount/sum(amount)) %>%
+  subset(year != 2023)
+
+code_departments = annual %>% select(c('code', 'name')) %>% unique()
+
+depat <- read.csv('bydept.csv') %>%
+  left_join(code_departments,
+            by=c('department' = 'code'),
+            suffix = c("", ".y")) %>%
+  rename(department_name = name.y)
+```
+
+```{r}
+# plot functions
+mycolors = c(brewer.pal(name="Dark2", n = 6), brewer.pal(name="Paired", n = 8))
+
+pie_chart <- function(df, source){
+  plot_ly(df,
+          labels=~department_name, 
+          values=~amount, 
+          textposition = ifelse(df$percentage > 5, "outside", "none"),
+          textinfo = "label+percent",
+          hoverinfo='label+percent',
+          type='pie',
+          source=source,
+          customdata = ~department_name,
+          automargin = TRUE) %>%
+    layout(showlegend = FALSE) 
+}
+
+bar_chart <- function(df, title){
+  df %>%
+  ggplot(aes(reorder(name, -amount), amount)) +
+    geom_bar(stat = "identity") +
+    labs(x="Category", y="Expenditure (dollars)", title = title) +
+    scale_y_continuous(labels = scales::comma) +
+    theme_bw() +
+    theme(axis.text = element_text(size = 14), axis.title = element_text(size = 16)) +
+    theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+}
+
+comparison_plot <- function(df, y, ylab, yscale) {
+  ggplot(data = df, aes(x = year, y = .data[[y]], color=name)) +
+      scale_x_continuous(limits = c(2007, 2023),
+                         breaks = seq(2008, 2023, by = 1)) +
+      geom_line() +
+      geom_point() +
+      scale_y_continuous(labels = yscale)+
+      labs(x = "Year", y = ylab)+
+      theme_bw() +
+      theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1)) +
+      labs(color="Department")
+}
+
+```
+
+
+```{r}
+# building shinydashboard
+library(shiny)
+library(shinydashboard)
+```
+
+```{r}
+ui <- dashboardPage(
+  dashboardHeader(title = "Wisconsin State Expenditures"),
+  dashboardSidebar(
+    sidebarMenu(
+      
+      menuItem("Widgets", tabName = "widgets", icon = icon("th")),
+      
+      menuItem("Budget by year", tabName = "slider2",
+               sliderInput(inputId = "year",
+                           label = "Year",
+                           min=2008,
+                           max=2022, 
+                           value=2022,
+                           sep=""),
+               selectizeInput("tab1_department", "Select a Department:", selected ="University of Wisconsin System", choices = code_departments$name)),
+      
+      menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
+      
+      menuItem("Trends",
+               tabName = "slider1",
+               selectInput("department", "Department for breakdown:", choices = unique(annual$name)),
+               selectizeInput(
+        "tab2_departments",
+        "Departments for comparison",
+        code_departments$name,
+        selected = c("University of Wisconsin System", "Administration, Department of"),
+        multiple = TRUE
+      ))
+      
+      
+      )
+  ),
+  
+  ######
+  
+  ## Body content
+  dashboardBody(
+    tabItems(
+      # First tab content
+      tabItem(tabName = "dashboard",
+        fluidRow(
+          column(width=6,
+          plotOutput("plot1",
+                     height = 800)
+        ),column(width=6,
+          plotOutput("plot2",
+                     height = 800)
+        )
+      )),
+      
+      
+      # Second tab content
+      tabItem(tabName = "widgets",
+        tabItem(tabName = "slider2",
+        fluidRow(
+          plotOutput("treemap"),
+          ),
+        fluidRow(
+          column(width=6, plotlyOutput("pieChart")),
+          column(width=6, plotOutput("barchart"))
+        )
+        
+        )
+      )
+    )
+  )
+)
+```
+
+```{r}
+server <- function(input, output) {
+  
+    dept_reactive <- reactiveVal("University of Wisconsin System")
+    
+    observeEvent(
+     input$tab1_department,
+     dept_reactive(input$tab1_department))
+      
+    dept_subset <- reactive({
+      depat %>% filter(year == input$year & !is.na(code))
+    })
+    
+    annual_subset <- reactive({
+      annual %>% filter(name %in% input$tab2_departments)
+    })
+  
+    output$pieChart <- renderPlotly({
+    dept_subset() %>%
+      group_by(department_name) %>%
+      summarise(amount = sum(amount)) %>%
+      filter(!is.na(amount)) %>%
+      arrange(desc(amount)) %>%
+      mutate(percentage=amount/sum(amount)*100) %>%
+      pie_chart(source="pie")
+  })
+  
+  
+  observeEvent(event_data("plotly_click", source = "pie"), {
+    click_data <- event_data("plotly_click", source = "pie")
+    dept_reactive(click_data$customdata[[1]])
+    print(dept_reactive())
+  })
+  
+  output$plot1 <- renderPlot({
+    depat %>%
+      filter(department_name == input$department & !is.na(code)) %>%
+      ggplot(aes(x = year, y = amount, fill=name)) +
+      scale_x_continuous(limits = c(2007, 2023),
+                         breaks = seq(2008, 2023, by = 1)) +
+      geom_bar(stat = "identity") +
+      scale_y_continuous(labels = scales::number_format(scale = 1e-6, suffix = "M"))+
+      ggtitle(input$department)+
+      labs(x = "Year", y = "Expenditure ($)", fill="Category")+
+      scale_fill_manual(values = mycolors) +
+      theme_bw() +
+      theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+  })
+  
+  output$plot2 <- renderPlot({
+    comparison_plot(annual_subset(), "amount", "Expenditure ($)", scales::number_format(scale = 1e-6, suffix = "M")) / comparison_plot(annual_subset(), "percentage", "% of year budget", scales::percent) + 
+      plot_layout(guides = 'collect')
+  })
+  
+    output$barchart <- renderPlot({
+    dept_subset() %>%
+      filter(dept_reactive() == department_name) %>%
+      group_by(name) %>%
+      arrange(desc(amount)) %>%
+      bar_chart(dept_reactive())
+  })
+    
+    output$treemap <- renderPlot({
+      ggplot(dept_subset(), aes(area = amount, fill = name, subgroup = department_name)) +
+        geom_treemap() +
+        geom_treemap_subgroup_border(color = "white") +
+        geom_treemap_subgroup_text(place = "centre", grow = T, reflow = T, size=6) +
+        labs(fill='Category') +
+        scale_fill_manual(values = mycolors)
+    })
+    
+}
+
+# Full sized window because pie chart scaling issues
+runGadget(ui, server, viewer = browserViewer(browser = getOption("browser")))
+```
+

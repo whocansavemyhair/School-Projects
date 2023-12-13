@@ -1,0 +1,133 @@
+---
+title: "Untitled"
+author: "Yichen Lin"
+date: "2023-04-19"
+output: html_document
+---
+
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r}
+library(shiny)
+library(tidyverse)
+library(ggplot2)
+library(dplyr)
+library(tidymodels)
+library(embed)
+library(stringr)
+```
+
+
+
+
+```{r}
+mac <- read.csv("https://raw.githubusercontent.com/whocansavemyhair/STAT-436/main/menu.csv")
+mac_menu <- mac%>%
+  select(-matches("Value\\.\\b"))
+
+mac_menu
+```
+
+```{r,fig.width = 8, fig.height = 6}
+pca_rec <- recipe(~., data = mac_menu) %>%
+  step_mutate(Serving.Size = as.numeric(str_extract(Serving.Size,"\\b\\d+\\.?\\d+\\b"))) %>%
+  update_role(Category, Item, new_role = "id") %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors())
+pca_prep <- prep(pca_rec)
+
+tidy(pca_prep,3) %>%
+  filter(component %in% str_c("PC",1:12)) %>%
+  ggplot() +
+  geom_col(aes(value, terms)) +
+  facet_wrap(~component, scales = "free_y")
+```
+
+```{r}
+bake(pca_prep, mac_menu) %>%
+  ggplot() +
+  geom_hline(yintercept = 0) +
+  geom_vline(xintercept = 0) +
+  geom_point(aes(PC1,PC2,col = Category)) +
+  scale_color_brewer(palette = "Set1") +
+  facet_wrap(~Category)
+```
+```{r}
+ui <- fluidPage (
+  titlePanel("McDonald's menu Data"),
+  sidebarLayout(
+    sidebarPanel(
+      selectInput(
+        inputId = "PCA",
+        label = "Select Principle Components:",
+        choices = c("PC1", "PC2", "PC3","PC4","PC5","PC6","PC7","PC8","PC9","PC10","PC11","PC12"),
+        multiple = TRUE
+      ),
+      selectInput(
+        inputId = "Category",
+        label = "Select Categorys:",
+        choices = c("Beef & Pork", "Beverage", "Breakfast", "Chicken & Fish", "Coffee & Tea", "Desserts", "Salads", "Smoothies & Shakes", "Snacks & Sides"),
+        multiple = TRUE
+      ),
+    ),
+    
+    mainPanel(
+      fluidRow(
+        column(width = 6, 
+               h3("PCA histogram"),
+               plotOutput("histogram")),
+        
+        column(width = 6, 
+               h3("Category vs PCs"),
+               plotOutput("scatterplot")),
+        ),
+    )
+  ),
+)
+```
+
+
+
+```{r}
+server <- function(input, output) {
+  
+  pca_data <- reactive({
+    bake(pca_prep, mac_menu) %>%
+      mutate(Category = as.factor(Category))
+  })
+  
+  
+  output$histogram <- renderPlot(
+    tidy(pca_prep,3) %>%
+      filter(component %in% input$PCA) %>%
+      ggplot() +
+      geom_col(aes(value, terms)) +
+      facet_wrap(~component, scales = "free_y", ncol = 2)
+  )
+  
+  output$scatterplot <- renderPlot(
+    if (length(input$PCA) >= 2 & length(input$Category) >= 1) {
+      data <- pca_data()
+      data %>%
+        filter(Category %in% input$Category) %>%
+        ggplot() +
+        geom_hline(yintercept = 0) +
+        geom_vline(xintercept = 0) +
+        geom_point(aes_string(x = input$PCA[1], y = input$PCA[2], col = "Category")) +
+        scale_color_brewer(palette = "Set1") +
+        facet_wrap(~Category, ncol = 2)
+    } else {
+      ggplot() + xlim(-10, 10) + ylim(-10, 10) 
+    }
+  )
+}
+
+shinyApp(ui,server)
+```
+
+
+

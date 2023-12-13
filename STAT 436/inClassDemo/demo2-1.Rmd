@@ -1,0 +1,74 @@
+---
+title: "Untitled"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r}
+knitr::opts_chunk$set(warnings = FALSE, message = FALSE)
+```
+
+
+[Plant Growth Experiment] This problem will give you practice with tidying a
+dataset so that it can be easily visualized. The data describe the height of
+several plants measured every 7 days. The plants have been treated with
+different amounts of a growth stimulant. The first few rows are printed below --
+`height.x` denotes the height of the plant on day `x`.
+
+```{r}
+library(tidyverse)
+plants <- read_csv("https://uwmadison.box.com/shared/static/qg9gwk2ldjdtcmmmiropcunf34ddonya.csv")
+plants
+```
+
+a. Propose an alternative arrangement of rows and columns that conforms to the
+tidy data principle.
+| treatment | plant_id | time | height
+```{r}
+
+```
+
+
+b. Implement your proposed arrangement from part (a).
+
+```{r}
+plants %>%
+  pivot_longer(c("height.0","height.7","height.14","height.21"))
+plants_long <- plants %>%
+  pivot_longer(starts_with("height")) %>%
+  mutate(
+    day = str_extract(name, "[0-9]+"),
+    day = as.integer(day)
+    )
+  
+plants_long
+  
+```
+geom_line(aes(name, value)) +
+facet_wrap(~ treatment)
+
+```{r}
+ggplot(plants_long, aes(day, value, col = treatment)) +
+  geom_point() +
+  geom_line(aes(group = plantid)) +
+  facet_wrap(~treatment)
+```
+
+
+
+c. Using the dataset from (b), design and implement a visualization showing the
+growth of the plants over time according to different treatments.
+
+
+//////////////
+```{r}
+library(nycflights13)
+flights %>% select(carrier, air_time, distance)
+flight %>%
+  mutate(speed = distance/air_time) %>%
+  ggplot() +
+  geom_boxplot(aes(speed, reorder(carrier, speed, median, na.rm = 1)))
+
+
+```
+

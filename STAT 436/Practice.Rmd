@@ -1,0 +1,65 @@
+---
+title: "Untitled"
+author: "Yichen Lin"
+date: "2023-02-28"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warnings = FALSE, message = FALSE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+library(tidyverse)
+ library(shiny)
+ penguins <- read_csv("https://uwmadison.box.com/shared/static/ijh7iipc9ect1jf0z8qa2n3j7dgem1gh.csv")
+ 
+ reset_selection <- function(x, brush) {
+   brushedPoints(x, brush, allRows = TRUE)$selected_
+ }
+ 
+ scatter <- function(x, selected_, var1, var2) {
+   x %>%
+     mutate(selected_ = selected_) %>%
+     ggplot(aes_string(var1, var2)) +
+     geom_point(aes(alpha = as.numeric(selected_), col = species)) +
+     scale_alpha(range = c(0.1, 1))
+ }
+ 
+ ui <- fluidPage(
+   fluidRow(
+     column(6, plotOutput("scatter1", brush = "plot_brush")),
+     column(6, plotOutput("scatter2", brush = "plot_brush"))
+   ),
+   dataTableOutput("table")
+ )
+ 
+ server <- function(input, output) {
+   selected <- reactiveVal(rep(TRUE, nrow(penguins)))
+   observeEvent(
+     input$plot_brush,
+     selected(reset_selection(penguins, input$plot_brush))
+   )
+   
+   output$scatter1 <- renderPlot({
+     scatter(penguins, selected(), "bill_length_mm", "bill_depth_mm")
+   })
+   output$scatter2 <- renderPlot({
+     scatter(penguins, selected(), "flipper_length_mm", "body_mass_g")
+   })
+   
+   output$table <- renderDataTable(filter(penguins, selected()))
+ }
+ 
+ shinyApp(ui, server)
+ ```
+```
+
+
+```{r}

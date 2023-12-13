@@ -1,0 +1,54 @@
+---
+title: "Untitled"
+author: "Yichen Lin"
+date: "2023-03-05"
+output: html_document
+---
+1. [Spotify Time Series I]  In this problem, we will study music streaming on
+Spotify in 2017. We'll start by looking at some characteristics of the most
+streamed song, and then will practice how to extract features from across the
+collection of most streamed songs.
+    
+    a. Let's look at the most streamed song of 2017, which was "Shape of You." The
+    dataset
+    [here](https://uwmadison.box.com/shared/static/hvplyr3jy6vbt7s80lqgfx81ai4hdl0q.csv)
+    contains the number of streams for this song across regions, for each day in
+    which it was in the Spotify 100 most streamed songs for that region. Create a
+    `tsibble` object from this dataset, keying by `region` and indexing by `date`.
+    
+    b. Filter to `region == "global"`, and make a `gg_season` plot by month. Comment
+    on the what you see.
+    
+```{r}
+library(tsibble)
+library(tidyverse)
+library(feasts)
+songs <- read.csv("https://uwmadison.box.com/shared/static/hvplyr3jy6vbt7s80lqgfx81ai4hdl0q.csv")
+head(songs)
+```
+(a)
+```{r}
+songs$date <- as.Date(songs$date)
+tsi_songs <- as_tsibble(songs,
+                        key = "region",
+                        index = date)
+tsi_songs
+```
+(b)
+```{r}
+tsi_songs <- as_tsibble(filter(songs, region == "global"),
+                        key = "region",
+                        index = date)
+gg_season(tsi_songs,period = "year")
+```
+
+```{r}
+gg_season(tsi_songs,period = "week")
+```
+
+
+```{r}
+gg_season(tsi_songs,period = "month")
+```
+
+Comment: When setting the `period` argument to "year", there is a clear, seasonal increasing trend from January to April, and a decreasing trend from April to January 2018. And around April, there is a cyclic, sharp increase and decrease. Assuming that the seasonality is "week", I set `period` to "week". Then, We can find that from Monday to Friday, there is a slightly increasing trend. While from Friday to Sunday, after streams reach the peak, there is a clear decreasing trend for almost all weeks. And comparing each week, we know that during the first 10 weeks, streams increase gradually and then, they keep decreasing as we see in the plot of the "year" period.

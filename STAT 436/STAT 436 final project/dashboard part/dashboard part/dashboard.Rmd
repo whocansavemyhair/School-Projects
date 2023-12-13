@@ -1,0 +1,182 @@
+---
+title: "milestone3"
+author:
+  - Group 13
+documentclass: ctexart
+keywords:
+  - 中文
+  - R Markdown
+output:
+  rticles::ctex:
+    fig_caption: yes
+    number_sections: yes
+    toc: yes
+---
+
+```{r}
+library(ggplot2)
+library(shiny)
+library(tidyverse)
+library(ggrepel)
+library(plotly)
+library(tidyverse)
+library(plotly)
+library(treemapify)
+```
+
+```{r}
+# loading files
+setwd('/Users/zdliu/Desktop/STAT-436/project/dataset')
+annual <- read.csv('annual.csv')
+depat <- read.csv('bydept.csv')
+
+annual <- subset(annual, year != 2023)
+```
+
+```{r}
+# plot functions
+pie_chart <- function(df, source){
+  plot_ly(df,
+          labels=~name, 
+          values=~amount, 
+          textposition=ifelse(df$percentage>1, "outside", "none"),
+          textinfo = "label+percent",
+          hoverinfo='label',
+          type='pie',
+          source=source,
+          customdata = ~name) %>%
+    layout(showlegend = FALSE) 
+}
+
+bar_chart <- function(df, title){
+  df %>%
+    mutate(catagory = fct_reorder(catagory, desc(total_expenditure))) %>%
+  ggplot(aes(catagory, total_expenditure)) +
+    geom_bar(stat = "identity") +
+    labs(x="Catagory", y="Expenditure (dollor)", title = paste0("The expenditure of ",title) ) +
+    theme_bw() +
+    theme(axis.text = element_text(size = 14), axis.title = element_text(size = 16)) +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1))
+}
+
+```
+
+
+```{r}
+# building shinydashboard
+library(shiny)
+library(shinydashboard)
+
+ui <- dashboardPage(
+  # 标题
+  dashboardHeader(title = "Financial Expenditures"),
+  dashboardSidebar(
+    sidebarMenu(
+      
+      menuItem("Widgets", tabName = "widgets", icon = icon("th")),
+      
+      menuItem("Plot2", tabName = "slider2",
+               sliderInput(inputId = "year", label = "Year", 2008, 2022, c(2008, 2022))),
+      
+      menuItem("Dashboard", tabName = "dashboard", icon = icon("dashboard")),
+      
+      menuItem("Plot1", tabName = "slider1",selectInput("department", "Select a Department:", choices = unique(annual$name)))
+      
+      
+      )
+  ),
+  
+  ######
+  
+  ## Body content
+  dashboardBody(
+    tabItems(
+      # First tab content
+      tabItem(tabName = "dashboard",
+        fluidRow(
+          box(plotOutput("plot1", height = 800,width = 800))
+        )
+      ),
+      
+      
+      # Second tab content
+      tabItem(tabName = "widgets",
+        tabItem(tabName = "slider2",
+        fluidRow(
+          box(plotlyOutput("pieChart",height = 300,width = 350),
+          box(title = "Controls",plotOutput("barchart",height = 300,width = 350))
+        )
+      ))
+      )
+    )
+  )
+  
+  
+  
+  #####
+  # dashboardBody(
+  #   # 放置2个box,每个box里放入出图和控件
+  #   fluidRow(
+  #     box(plotOutput("plot1", height = 250)),
+  #     box(
+  #       title = "Controls",
+  #       selectInput("department", "Select a Department:", choices = unique(annual$name))
+  #     )
+  #   )
+  # )
+)
+
+server <- function(input, output) {
+  # 绘图代码
+  # set.seed(122)
+  # histdata <- rnorm(500)
+  
+    dept_reactive <- reactiveValues(dept_nm="University of Wisconsin System")
+  
+    output$pieChart <- renderPlotly({
+    annual %>%
+      filter(year >= input$year[1] & year <= input$year[2] & !is.na(code)) %>%
+      group_by(name) %>%
+      summarise(amount = sum(amount)) %>%
+      arrange(desc(amount)) %>%
+      mutate(percentage=amount/sum(amount)*100) %>%
+      pie_chart(source="pie")
+  })
+  
+  
+  observeEvent(event_data("plotly_click", source = "pie"), {
+    click_data <- event_data("plotly_click", source = "pie")
+    dept_reactive$dept_nm <- click_data$customdata[[1]]
+    print(dept_reactive$dept_nm)
+    })
+  
+  output$plot1 <- renderPlot({
+    ggplot(data = annual[annual$name == input$department, ], aes(x = year, y = amount)) +
+      scale_x_continuous(limits = c(2007, 2023),
+                         breaks = seq(2008, 2023, by = 1)) +
+      geom_col()+
+      geom_line(aes(color = 'red'))+
+      geom_point(aes(color = 'red', tooltip = amount))+
+      scale_y_continuous(labels = scales::number_format(scale = 1e-6, suffix = "M"))+
+      ggtitle(paste0(input$department, " Expenditures by Year"))+
+      labs(x = "Year", y = "Expenditure Amount (in $ Billions)")+
+      theme_bw()+
+      theme(legend.position = "none")
+  })
+  
+    output$barchart <- renderPlot({
+    depat %>%
+      left_join(annual, by=c("department"="code", "year"="year")) %>%
+      mutate(catagory=name.x, cata_amount=amount.x, department_name=name.y, total_amount=amount.y) %>%
+      filter(year >= input$year[1] & year <= input$year[2] 
+             & !is.na(code) & dept_reactive$dept_nm == department_name) %>%
+      group_by(catagory) %>%
+      summarise(total_expenditure = sum(cata_amount)) %>%
+      bar_chart(dept_reactive$dept_nm)
+  })
+
+}
+
+shinyApp(ui, server)
+```
+

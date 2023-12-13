@@ -1,0 +1,119 @@
+---
+title: "hwk2"
+author: "Yichen Lin"
+date: "2023-03-12"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(knitr)
+knitr::opts_chunk$set(cache = TRUE, message = FALSE, warning = FALSE, echo = TRUE)
+```
+
+```{r}
+library(shiny)
+library(tidyverse)
+library(ggplot2)
+```
+
+
+```{r}
+heart <- read.csv("https://raw.githubusercontent.com/whocansavemyhair/STAT-436/main/heart_disease.csv")
+
+heart <- heart[complete.cases(heart),]
+
+heart
+```
+
+
+```{r}
+ui <- fluidPage (
+  titlePanel("Heart Disease Data"),
+  HTML("<h4>Introduction</h4>"),
+  p("Hi all! This is a data set about heart stroke from kaggle(https://www.kaggle.com/datasets/mirzahasnine/heart-disease-dataset?resource=download). In this shiny app, we will explore whether and how the factors(BMI, age, heart rate, glucose) correlate with heart disease incident."),
+  sidebarLayout(
+    sidebarPanel(
+      p("Pease select the range of bmi and age here"),
+      sliderInput("bmi","PLease Enter the range of bmi",
+              value = c(15,60),
+              min = 15,
+              max = 60),
+      fluidRow(
+        column(10, plotOutput("histogram", brush = brushOpts("plot_brush", direction = "x")))
+        ),
+    ),
+    
+    mainPanel(
+      HTML("<h4>Ouput Description</h4>"),
+      p("This is a scatterplot exploring the relationship between heart rate, glucose, and whether heart stroke happened."),
+      fluidRow(
+        column(12, plotOutput("scatterplot")),
+        ),
+      p("This is the ratio of the number of people who had a heart attack to those who did not in the selected data."),
+      verbatimTextOutput("ratio"),
+    )
+    
+  ),
+)
+```
+
+
+```{r}
+
+select_age <- function(heart, brush) {
+  brushedPoints(heart,brush,allRows = TRUE)$selected_
+}
+
+#draw two scatter plots
+scatter <- function(df, selected, bmi,  colstring) {
+   df %>%
+    mutate(
+      selected_ = selected & df$BMI >= bmi[1] & df$BMI <= bmi[2],
+      selected_ = factor(selected_, levels = c("TRUE", "FALSE"))
+      ) %>%
+    ggplot(aes(heartRate, glucose)) +
+    geom_point(aes(col = selected_)) +
+    facet_wrap(~ Heart_.stroke) +
+    scale_color_manual(values = c(colstring,"grey"))
+}
+
+#calculate the ratio
+calculate_ratio <- function(df) {
+  sum(df$Heart_.stroke == "yes")/sum(df$Heart_.stroke == "No")
+}
+
+```
+
+```{r}
+server <- function(input, output) {
+  sample_selected <- reactiveVal(rep(TRUE, nrow(heart)))
+  observeEvent(
+    input$plot_brush,
+    sample_selected(select_age(heart,input$plot_brush))  
+  )
+  
+  output$scatterplot <- renderPlot(
+    scatter(heart,sample_selected(),input$bmi,"blue")
+  )
+  
+  
+  output$histogram <- renderPlot(
+    heart %>%
+      ggplot() +
+      geom_histogram(aes(age))
+  )
+  
+  
+  output$ratio <- renderPrint({
+    heart %>%
+      filter(sample_selected() & BMI >= input$bmi[1] & BMI <= input$bmi[2]) %>%
+      calculate_ratio()
+  })
+}
+
+shinyApp(ui,server)
+```
+
+
+
+

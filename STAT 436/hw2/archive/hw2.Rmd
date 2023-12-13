@@ -1,0 +1,75 @@
+```{r}
+library(shiny)
+library(dplyr)
+library(ggplot2)
+library(knitr)
+# Read the Titanic dataset and do some data preparation
+titanic <- read.csv("train.csv", stringsAsFactors = FALSE)
+
+
+titanic <- titanic %>% select(Survived, Pclass, Sex, Age, Fare)
+titanic <- na.omit(titanic) # remove rows with missing values
+titanic$Survived <- factor(titanic$Survived, levels = c(0, 1), labels = c("Not Survived", "Survived"))
+titanic$Pclass <- factor(titanic$Pclass)
+```
+
+```{r}
+ui <- fluidPage( 
+  navbarPage("Titanic Dataset Exploration:",
+    tabPanel("Home", 
+      sidebarPanel(
+        HTML("<h3>Introduction</h3>"),
+        p("This dataset contains information about the passengers on the Titanic sunk in 1912, including their class, age, sex, fare paid, and whether or not they survived the sinking."),
+        selectInput("pclass","Select Passenger Class" , choices = levels(titanic$Pclass)),
+        sliderInput("age","Select Age Range", min = 0, max = 100, value = c(0, 100)),
+        sliderInput("fare","Select Fare Range" , min = 0, max = max(titanic$Fare), value = c(0, max(titanic$Fare)))
+      ),
+      mainPanel(
+        plotOutput("titanicplot"),
+        uiOutput("fact_text")
+      ),
+      sidebarPanel(
+        actionButton("fact_button", "Interesting Fact")
+      )
+    ),
+    tabPanel("Discussion",
+        titlePanel("Discussion"),
+        HTML("<h3>Process of creating Intuitive Interactive User Interface</h3>"),
+        HTML("<p>During data preparation, We selected relevant variables, removed rows with missing values, and converted some columns into factors. <br> The interface was structured with a sidebar panel for user inputs and a main panel to display the plot output. We added a dropdown menu to select passenger class, and labels and slider inputs to select passenger age and fare ranges. We had a button to display interest facts.<br>We chose a simple design for the interface with concise headings and labels that guide the user to select desired filters as well as slider inputs rather than text box to make the selection more engaging and fun. The scatter plot displays the relationships between age and fare, as well as these variables and survival.<p>"),
+        HTML("<h3>Reactive Graph structure</h3>"),
+        HTML("<p>The user interface(UI) has two tabs: 'Home' and 'Discussion'.<br>In the 'Home' tab, there is a sidebar panel where users can select filters for passenger class, age range, and fare range. There is also a button to display two interesting facts about the virtualization. The main panel displays a scatter plot of age vs. fare, colored by survival status, with facet wrap by sex.<p>")
+      ),
+    )
+)
+```
+
+```{r}
+server <- function(input, output) {
+  filtered_data <- reactive({
+    data=titanic%>%filter(Pclass == input$pclass,
+                          Age >= input$age[1] & Age <= input$age[2],
+                          Fare >= input$fare[1] & Fare <= input$fare[2])
+    data
+  })
+  
+  output$titanicplot <- renderPlot({
+    if (nrow(filtered_data())==0){
+      warning("No data available for selected filters. Please try again.")
+    }else{
+    ggplot(filtered_data(), aes(x = Age, y = Fare, color = Survived)) +
+      geom_point(alpha = 0.7, size = 3) +
+      facet_wrap(~ Sex) +
+      labs(x = "Age", y = "Fare") +
+      theme_minimal()
+    }
+  })
+  
+   output$fact_text <- renderUI({
+    if(input$fact_button > 0) {
+      HTML("<p>1.Regardless of passenger class, age, and fare, female passengers always had a higher likelihood of survival compared to males.<br>2.Regardless of age, fare, and sex, passengers in the third class are more likely to die in the sinking compared to other passenger class, while passengers in the first class are more likely to survive.</p>")
+    }
+  })
+}
+
+shinyApp(ui = ui, server = server)
+```

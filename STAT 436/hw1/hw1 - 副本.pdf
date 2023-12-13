@@ -1,0 +1,377 @@
+---
+title: "hw1"
+author: Yichen Lin 9085319599
+output: html_document
+date: "2023-02-19"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(reshape2)
+```
+
+## Reshaping practice
+
+1. [Reshaping practice] The following parts ask you to provide R code that
+transforms one dataset (I) into another (II).
+    a. Regional murder rates: Turn [I](https://uwmadison.box.com/shared/static/h4gau9heqy3uue9rmpq9b55s3kw37zd8.csv) into [II](https://uwmadison.box.com/shared/static/shy7od3ydtiqu3lmqvy4nbi17qkg2ys4.csv). 
+    
+```{r}
+murder_rate1 <- read.csv("https://uwmadison.box.com/shared/static/h4gau9heqy3uue9rmpq9b55s3kw37zd8.csv")
+murder_rate2 <- read.csv("https://uwmadison.box.com/shared/static/shy7od3ydtiqu3lmqvy4nbi17qkg2ys4.csv")
+murder_rate1
+```
+
+```{r}
+murder_rate1 %>%
+  group_by(region) %>%
+  summarise(murders = sum(total),population = sum(population)) %>%
+  mutate(murder_rate = murders / population) %>%
+  arrange(.,murder_rate)
+```
+```{r}
+murder_rate2
+```
+
+b. Antiobitics and bacteria. Turn [I](https://uwmadison.box.com/shared/static/bq4afq9kl2zn9qlb89q2rxhrrv73iuil.csv) into [II](https://uwmadison.box.com/shared/static/gmzul7bp78o6kwtutl73hkiyxea4dr21.csv)
+
+```{r}
+data1 <- read.csv("https://uwmadison.box.com/shared/static/bq4afq9kl2zn9qlb89q2rxhrrv73iuil.csv")
+data2 <- read.csv("https://uwmadison.box.com/shared/static/gmzul7bp78o6kwtutl73hkiyxea4dr21.csv")
+data1
+```
+```{r}
+data1 %>%
+  pivot_longer(
+    cols = Unc05qi6:Unc09fy6,
+    names_to = 'species',
+    values_to = 'value',
+    values_drop_na = TRUE
+  ) %>%
+  mutate(ind = str_extract(`sample`,"[A-Z]")) %>%
+  mutate(time = substring(sample,2,3)) %>%
+  select(sample,ind,time,antibiotic,species,value) %>%
+  arrange(species)
+```
+
+
+
+```{r}
+data2
+```
+
+## City Temperatures
+
+1. [City Temperatures] Let's create versions of Figure 2.3 and 2.4 from the
+[reading](https://clauswilke.com/dataviz/aesthetic-mapping.html) this week. The
+command below reads in the data. We've filtered to a slightly different set of
+cities (Barrow is in Alaska, Honolulu is in Hawaii), but we should still be able
+to study changes in temperature over time.
+
+    ```{r}
+    temp <- read_csv("https://raw.githubusercontent.com/krisrs1128/stat479_s22/main/data/temperatures.csv")
+    temp
+    ```
+a. Make a version of Figure 2.3 using a line mark (`geom_line`). Make at
+least one customization of the theme to make the plot more similar to the
+version in Figure 2.3. _Hint: To group the lines by city, use the `group = ` aesthetic mapping._
+```{r}
+ggplot(temp) +
+  geom_line(aes(x = date, y = temperature, group = city, col = city),size = 1) +
+  labs(x = "month", y= "temperature(°F)") +
+  scale_x_continuous(label = c("Jan","Apr","Jul","Oct","Jan")) +
+  scale_y_continuous(
+    limits = c(-20,110),
+    breaks = c(0,20,40,60,80,100)
+    )
+```
+
+
+b. Using the `group_by` + `summarise` pattern, compute the mean temperature
+for each month in each city.
+```{r}
+temp %>%
+  group_by(city,month) %>%
+  summarise(mean_temperature = mean(temperature))
+```
+
+ 
+
+c. Using the data generated in (b), Make a version of Figure 2.4 using a
+tile mark (`geom_tile`). Try either (i) adding the `scale_fill_viridis_c(option =
+"magma")` scale to match the color scheme from the reading or (ii) adding
+coord_fixed()` to make sure the marks are squares, not rectangles.
+
+```{r}
+average_temp <- temp %>%
+  group_by(city,month) %>%
+  summarise(mean_temperature = mean(temperature))
+average_temp
+```
+
+
+```{r,fig.width=8,fig.height=3}
+ggplot(average_temp,aes(month,city,fill=mean_temperature)) +
+  geom_tile() +
+  scale_fill_viridis_c(option ="magma") +
+  scale_x_discrete(
+    #breaks = c(1,2,3,4,5,6,7,8,9,10,11,12),
+    labels = c("01"="Jan","02"="Feb","03"="Mar","04"="Apr","05"="May","06"="Jun","07"="Jul","08"="Aug","09"="Sep","10"="Oct","11"="Nov","12"="Dec")
+    )
+```
+
+d. Compare and contrast the two displays. What types of comparisons are
+easier to make / what patterns are most readily visible using Figure 2.3 vs.
+Figure 2.4, and vice versa?
+
+For Figure 2.3, we can easily get precise information about how the temperature change over time for each city.Therefore, with the help of it, we know the variation through the year for each city. At the same time, as a line chart, we can obtain more accurate temperature at any point in any city.
+
+
+Figure 2.4 shows the mean temperature of each month in each city. In this heat map, mean temperature is presented in intuitive colors. People can know which month's average temperature is higher. Also, because of the intuition of colors, we can tell in which city the average temperature through the whole year is higher.
+
+To sum up, Figure 2.3 is more precise, clearly showing the trend through the year. Figure 2.4 is more intuitive, focusing on the average temperature. Our choice depends on the data we want to visualize and the way we want people to understand these data.
+
+
+## Soccer code review
+1. [Soccer Code Review] This exercise asks you to conduct an imaginary code
+review. These are often used in data science teams to,
+    
+    * Catch potential bugs
+    * Make sure code is transparent to others
+    * Create a shared knowledge base
+    
+    It is important to be perceptive but friendly.
+    * Can the code be made more compact?
+    * Are there visual design choices / encodings that could be refined?
+    * If your colleague did something well, say so!
+    
+    They can also be a great way to learn new functions and programming patterns.
+    Unlike standard code-reviews, I ask you to give an example implementing your
+    recommendations.
+      
+    Specifically, in this review, suppose you are working on a sports blog, and
+    your colleague is soccer interested in which teams won the most games in a
+    few European leagues over the last few years. They have written the code
+    below. Provide your code review as a set of bullet points, and include code
+    giving an example implementation of your ideas. The original data are from
+    [this link](https://www.kaggle.com/slehkyi/extended-football-stats-for-european-leagues-xg).
+    
+    ```{r, fig.cap = "An example figure for code review.", fig.width = 16, fig.height = 4}
+    win_props <- read_csv("https://raw.githubusercontent.com/krisrs1128/stat479_s22/main/exercises/data/understat_per_game.csv") %>%
+      group_by(team, year) %>%
+      summarise(n_games = n(), wins = sum(wins) / n_games)
+    
+    best_teams <- win_props %>%
+      ungroup() %>%
+      slice_max(wins, prop = 0.2) %>%
+      pull(team)
+    
+    win_props %>%
+      filter(team %in% best_teams) %>%
+      ggplot(aes(x=year,y=team,fill=)) +
+      geom_point(aes(year, team, size = n_games, alpha = wins))
+    ```
+
+```{r}
+win_props <- read_csv("https://raw.githubusercontent.com/krisrs1128/stat479_s22/main/exercises/data/understat_per_game.csv") %>%
+  group_by(team, year) %>%
+  summarise(n_games = n(), wins = sum(wins) / n_games)
+win_props
+```
+
+
+```{r}
+best_teams <- win_props %>%
+      ungroup() %>%
+      slice_max(wins, prop = 0.2) %>%
+      pull(team)
+best_teams
+```
+The code above calculate the rate of winning for each team, choose the top 20% 
+and plot a scatter plot for them. I think we can redesign the size of this 
+plot and labels to make it more intuitive.
+
+```{r}
+win_props <- read_csv("https://raw.githubusercontent.com/krisrs1128/stat479_s22/main/exercises/data/understat_per_game.csv") %>%
+  group_by(team, year) %>%
+  summarise(total_games = n(), wins_rate = sum(wins) / total_games)
+
+best_teams <- win_props %>%
+  ungroup() %>%
+  slice_max(wins_rate, prop = 0.2) %>%
+  pull(team)
+
+win_props %>%
+  filter(team %in% best_teams) %>%
+  
+  ggplot(aes(year, team, size = total_games, alpha = wins_rate)) +
+  geom_point() +
+  theme(text = element_text(size=10),element_line(size=1)) +
+  labs(title = "Winning Rate of Top 20% Teams")
+```
+
+
+
+## Visual Redesign
+ [Visual Redesign] In this exercise, you will find a visualization you have
+made in the past and redesign it using the skills you have learned in this
+course.
+
+  	a. Identify one of your past visualizations for which you still have data.
+  	Include a screenshot of this past visualization.
+  	
+![Diamond](Diamond.png)
+
+	  b. Comment on the main takeaways from the visualization and the graphical
+	  relationships that lead to that conclusion. Is this takeaway consistent with
+	  the intended message? Are there important comparisons that you would like to
+	  highlight, but which are harder to make in the current design?
+	  
+	  According to the screenshot, the main takeaway is the relationship between 
+	  price of diamonds and the carat of diamonds. And there is a clear positive 
+	  relation between those two values. However, the picture does not fully show 
+	  the impact of other factors on the price, which may be the reason of those 
+	  obvious unusual data in certain range of carat.
+	  
+  	c. Comment on the legibility of the original visualization. Are there aspects
+  	of the visualization that are cluttered or difficult to read?
+  	
+  	Yes. We can see that at certain points, like carat=1, carat=1.5, data points are
+  	clustered together.And even for diamonds at same mass, the variance of price
+  	is huge. So we can try to find the relation between price and other factors 
+  	to find out the reasons for this phenomenon.
+  	
+  	d. Propose and implement an alternative design. What visual tasks do you
+  	prioritize in the new design? Did you have to make any trade-offs? Did you
+  	make any changes specifically to improve legibility.
+  	
+  	For this implement, I want to find out the influence of cut, color and clarity 
+  	on the relationship between price and carat. 
+
+```{r}
+diamonds
+```
+
+  	
+
+```{r}
+library(patchwork)
+p1 <- ggplot(diamonds,aes(x=carat,y=price,color = clarity)) +
+  facet_wrap(~ cut) +
+  geom_point(alpha = 0.5)
+
+p2 <- ggplot(diamonds,aes(x=carat,y=color,fill = price)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = 'magma') +
+  labs(x="Carat",y="Color",fill="Price")
+
+p1/p2
+```
+
+
+## Antibiotcs Comparison
+ [Antibiotics Comparison] Below, we provide three approaches to visualizing
+species abundance over time in an antibiotics dataset.
+
+    ```{r}
+    antibiotic <- read_csv("https://uwmadison.box.com/shared/static/5jmd9pku62291ek20lioevsw1c588ahx.csv")
+    antibiotic
+    ```
+    
+    For each approach, describe,
+    
+      * One type of visual comparison for which the visualization is well-suited.
+      
+      * One type of visual comparison for which the visualization is poorly-suited.
+      
+    Make sure to explain your reasoning.
+    
+    a. Approach 1
+    ```{r, echo = FALSE, out.width = "0.55\\textwidth"}
+    ```
+It's easy for people to compare the trend of different species and different 
+antibiotics under different conditions. As a line chart, this approach focus on 
+the value change in different samples, which make comparison between samples
+very intuitive.
+    
+However, because of the fixed y-axis range, when the absolute value is very small in
+certain samples, we can hardly get detailed information about them. That's the cost
+of the convenient comparison.
+    
+    b. Approach 2
+    ```{r, echo = FALSE, out.width = "0.55\\textwidth"}
+    ```
+
+Approach 2 is a group of heat map. Our attention will be attracted to those darker
+areas, which represent higher values than other times and samples. So this approach
+emphasizes outstanding values, and we can easily know under which conditions the 
+values will be higher.
+
+As the cost of that, we are unable to learn the exact value of each data point. 
+Different colors represent different range of value, so the detailed values are 
+hidden. 
+
+    c. Approach 3
+    ```{r, echo = FALSE, out.width = "0.55\\textwidth"}
+    ```
+    
+For this approach, data are divided into three line chart according to their sample.
+So we can easily know how the value of different species change over time in each sample.
+And comparison between different species in the same sample are explicit.
+
+However, because the data are divided into three groups. Comparison between different
+samples from the same species at the same time are difficult.
+
+      d. Sketch code that could be used to make one of the three visualizations above.
+      
+ggplot(temp) +
+  geom_line(aes(x = date, y = temperature, group = city, col = city),size = 1) +
+  labs(x = "month", y= "temperature(°F)") +
+  scale_x_continuous(label = c("Jan","Apr","Jul","Oct","Jan")) +
+  scale_y_continuous(
+    limits = c(-20,110),
+    breaks = c(0,20,40,60,80,100)
+    )
+```{r}
+ggplot(antibiotic) +
+  geom_line(aes(x=time,y=svalue,group=species,col = species),size = 0.7) +
+  labs(x = "time",y="svalue")+
+  facet_wrap(~ind,nrow = 3)
+```
+
+## Homelessness
+ [Homelessness] Take a static screenshot from any of the visualizations in
+this
+[article](https://www.theguardian.com/us-news/ng-interactive/2017/dec/20/bussed-out-america-moves-homeless-people-country-study),
+and deconstruct its associated visual encodings. 
+
+![homelessness](Homelessness.png)
+
+a. What do you think was the underlying data behind the current view? What where
+the rows, and what were the columns?
+b. What were the data types of each of the columns?
+c. What encodings were used? How are properties of marks on the page derived
+from the underlying abstract data?
+d. Is multi-view composition being used? If so, how?
+
+
+a. The data behind the plot should contain information about the the departure 
+and destination of homeless bus journeys. For each row, there are detailed 
+departure and destination, which contains the exact state and city.The column names 
+should have ID, time, departure and destination. IDs are used to count the total 
+number of journeys.
+
+b. For columns, the data type of ID, departure and destination should be characters.
+And the data type of time can be date or numeric.
+
+c. The main encoding in these figures is detailed locations in the map and color 
+and size of points. The red points represent the starting points of journeys. 
+the blue points represent the destinations. And the size of blue points indicates
+the total number of people arriving in these cities.
+
+d. Yes. There two main plots. The first one is a map, where shows the number of 
+homeless people arriving in the cities by the size of the dots. And the second views
+show the total number of homelessness bus journeys for each year using a bar chart.

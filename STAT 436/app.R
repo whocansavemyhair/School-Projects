@@ -1,0 +1,372 @@
+library(ggplot2)
+library(shiny)
+library(tidyverse)
+library(ggrepel)
+library(plotly)
+library(treemapify)
+library(patchwork)
+library(RColorBrewer)
+# building shiny dashboard
+library(shiny)
+library(shinydashboard)
+
+# loading files
+load_data = function(path, data) {
+  if (!file.exists(path)) {
+    download.file(data, path, method="auto")
+  }
+  readr::read_csv(path)
+}
+
+annual <- load_data('./annual.csv', 'https://uwmadison.box.com/shared/static/6w1pooo9mkh9dkg2yz2p5sffa2j01y48.csv')
+depat <- load_data('./bydept.csv','https://uwmadison.box.com/shared/static/tvs8zrvm9casu8eujdk5z4dglrni8e5o.csv')
+
+
+annual <- annual %>%
+  group_by(year) %>%
+  reframe(code,
+          name,
+          amount,
+          percentage = 2*amount/sum(amount)) %>%
+  subset(year != 2023)
+
+code_departments = annual %>% select(c('code', 'name')) %>% unique()
+
+depat <- depat %>%
+  left_join(code_departments,
+            by=c('department' = 'code'),
+            suffix = c("", ".y")) %>%
+  rename(department_name = name.y)
+
+# plot functions
+mycolors = c(brewer.pal(name="Dark2", n = 6), brewer.pal(name="Paired", n = 8))
+
+department_proportion_pie_chart <- function(df, labels, values="amount", source){
+  plot_ly(df,
+          labels=df[[labels]], 
+          values=df[[values]], 
+          textposition = ifelse(df$percentage > 5, "outside", "none"),
+          textinfo = "label+percent",
+          hoverinfo='label+percent',
+          type='pie',
+          source=source,
+          customdata = df[[labels]],
+          automargin = TRUE) %>%
+    layout(showlegend = FALSE) 
+}
+
+category_expend_bar_chart <- function(df, title){
+  df %>% mutate(name = fct_reorder(name, desc(total_expenditure))) %>%
+    ggplot(aes(name, total_expenditure)) +
+    geom_bar(stat = "identity") +
+    labs(x="Category", y="Expenditure (dollars)", title = title) +
+    scale_y_continuous(labels = scales::comma) +
+    theme_bw() +
+    theme(axis.text = element_text(size = 14), axis.title = element_text(size = 16)) +
+    theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+}
+
+comparison_plot <- function(df, y, ylab, yscale) {
+  ggplotly(
+    ggplot(data = df, aes(x = year, y = .data[[y]], color=name)) +
+      scale_x_continuous(limits = c(2007, 2023),
+                         breaks = seq(2008, 2023, by = 1)) +
+      geom_line() +
+      geom_point() +
+      scale_y_continuous(labels = yscale)+
+      labs(x = "Year", y = ylab)+
+      theme_bw() +
+      theme(legend.position="bottom",
+            axis.text.x = element_text(size = 10, angle = 45, hjust = 1)) +
+      labs(color="Department")
+  ) %>%
+    layout(legend = list(orientation = "h",   # show entries horizontally
+                         xanchor = "center",  # use center of legend as anchor
+                         x = 0.5,
+                         y = -0.5)) 
+}
+
+stacked_trend_bar_chart <- function(df, trend, stack_by="name", stack_label="Category", title) {
+  plot = df %>%
+    ggplot(aes(x = year, y = amount)) +
+    scale_x_continuous(limits = c(2007, 2023),
+                       breaks = seq(2008, 2023, by = 1)) +
+    geom_bar(stat = "identity", aes(fill=.data[[stack_by]])) +
+    geom_line(data = trend) +
+    scale_y_continuous(expand = c(0, 0, 0.1, 0.1),
+                       labels = scales::number_format(scale = 1e-6, suffix = "M"))+
+    ggtitle(title)+
+    labs(x = "Year", y = "Expenditure ($)", fill=stack_label)+
+    theme_bw() +
+    theme(axis.text.x = element_text(size = 10, angle = 45, hjust = 1))
+  
+  if (stack_label == "Category") {
+    plot = plot + 
+      scale_fill_manual(values = mycolors)
+  }
+  
+  ggplotly(plot) %>%
+    layout(legend = list(orientation = "h", x = -0.5, y =-0.5))
+}
+
+ui <- dashboardPage(
+  dashboardHeader(title = "Wisconsin State Expenditures",  titleWidth = 300),
+  dashboardSidebar(
+    width = 300,
+    sidebarMenu(
+      menuItem("Overview", 
+               tabName = "Tab1", 
+               icon = icon("th")),
+      
+      menuItem("Expenditure by Depart. & Category", 
+               tabName = "Tab2",
+               # sliderInput(inputId = "year", 
+               #             label = "Year",
+               #             min = 2008,
+               #             max = 2022, 
+               #             value = c(2008, 2022)),
+               # selectizeInput("tab1_department",
+               #                "Select a Department:",
+               #                selected ="University of Wisconsin System",
+               #                choices = code_departments$name),
+               icon = icon("list-alt")),
+      
+      menuItem("Expenditure Trends", 
+               tabName = "Tab3", 
+               icon = icon("chart-line"))
+    )
+  ),
+  
+  ######
+  
+  ## Body content
+  dashboardBody(
+    tabItems(
+      # First tab content
+      tabItem(tabName = "Tab1",
+              
+              # introduction and word cloud
+              
+              fluidRow(
+                box(title = "INTRODUCTION", status = "primary", solidHeader = TRUE, width = 12, height = 300,
+                    box(title = "Intro", status = "primary", solidHeader = TRUE,
+                        "
+                    This application provides various visualizations for budget expenditures of the State of Wisconsin from 2008 to 2022, using data obtained from OpenBook Wisconsin (https://openbook.wi.gov). The expenditures are broken down into departments and categories. Several visualizations help users get a clear idea of the trends in spending over time, and the government's spending priorities.
+                  "), 
+                    box("Word Cloud",status = "primary", solidHeader = TRUE,
+                        img(src='https://uwmadison.box.com/shared/static/7777ho5eikqjcyra0xloshs17m5h3qtz', align = "center",width = "300px", height = "200px")))
+              ),
+              fluidRow(
+                box(title = "TOTAL EXPENDITURE PER YEAR (2008 - 22) | Lineplot", status = "primary", solidHeader = TRUE, width = 12, height = 500,
+                    plotlyOutput("tab1_trend"))
+              ),
+              
+              fluidRow(
+                column(8, offset = 4, align = "center",
+                       box(title = "YEARLY DEPARTMENT EXPENDITURE SNAPSHOT", status = "primary", 
+                           selectInput(inputId = "yearOverview",
+                                       label = "Select a Year",
+                                       choices = 2008:2022,
+                                       selected =2022)
+                       ),
+                ),
+              ),
+              fluidRow(
+                box(title = "", width = 12, align = "center", height = 500, solidHeader = TRUE,
+                    box("Top 5 Departments", width = 3, solidHeader = TRUE, dataTableOutput("tab1_table1")), 
+                    box("PIE CHART OF EXPENDITURE FOR SELECTED YEAR", width = 6, status = "warning", solidHeader = TRUE,
+                        plotlyOutput("tab1_piechart")), 
+                    box("Bottom 5 Departments", width = 3, solidHeader = TRUE, dataTableOutput("tab1_table2")))
+                
+              ),
+              
+      ),
+      
+      # Second tab content
+      tabItem(tabName = "Tab2",
+              
+              
+              fluidRow(
+                column(9, offset = 4, align = "center",
+                       box(title = "Granular - View of Expenditure Breakdown for Departments", 
+                           status = "primary",
+                           sliderInput(inputId = "pie_bar_year",
+                                       label = "Year",
+                                       min=2008,
+                                       max=2022, 
+                                       value = c(2022, 2022),
+                                       sep=""),
+                           
+                       ))),
+              
+              fluidRow(plotOutput("treemap")),
+              
+              
+              fluidRow(align = "center", height = 500, 
+                       #PIE CHART & BARPLOT ???
+                       column(width=6, plotlyOutput("tab2_piechart")),
+                       column(width=6, plotOutput("tab2_barchart")))
+      ),
+      
+      
+      # Third tab content
+      tabItem(tabName = "Tab3",
+              fluidRow(
+                column(9, 
+                       offset = 4, 
+                       align = "center",
+                       box(title = "DEPARTMENT BREAKDOWNS", 
+                           status = "primary", 
+                           selectInput("departmentVal", "Choose a department:", 
+                                       choices = unique(annual$name))))),
+              fluidRow(
+                box(title = "Expenditure Breakdown for Selected Department", 
+                    status = "primary", 
+                    solidHeader = TRUE, 
+                    width = 12,
+                    plotlyOutput("plot1", height = 600))),
+              
+              fluidRow(
+                column(9, 
+                       offset = 4,
+                       align = "center",
+                       box(title = "DEPARTMENT-WISE COMPARISONS", 
+                           status = "primary",
+                           selectizeInput("tab3_departments", "Choose departments to compare:", 
+                                          code_departments$name, 
+                                          selected = c("University of Wisconsin System", "Administration, Department of"),
+                                          multiple = TRUE)))),
+              fluidRow(
+                box(title = "Comparison of Expenditure over Years for Selected Departments",
+                    status = "primary", 
+                    solidHeader = TRUE,
+                    width = 12,
+                    plotlyOutput("plot2"))),
+              
+              fluidRow(
+                box(title = "Comparison of Percentage of Yearly Budget for Selected Departments", 
+                    status = "primary", solidHeader = TRUE, width = 12,
+                    plotlyOutput("plot3")))
+      )
+    )
+  )
+)
+
+#SERVER
+server <- function(input, output) {
+  
+  dept_reactive <- reactiveVal("University of Wisconsin System")
+  
+  dept_subset <- reactive({
+    depat %>% filter(year <= input$pie_bar_year[2] & year >= input$pie_bar_year[1] & !is.na(code))
+  })
+  
+  tab1_annual_subset <- reactive({
+    annual %>% 
+      filter(year == input$yearOverview & !is.na(code)) %>%
+      select(c('name', 'amount')) %>%
+      arrange(desc(amount)) %>%
+      rename(Name = name,
+             Amount = amount)
+  })
+  
+  tab3_annual_subset <- reactive({
+    annual %>% filter(name %in% input$tab3_departments)
+  })
+  
+  output$tab1_piechart <- renderPlotly({
+    tab1_annual_subset() %>%
+      mutate(percentage=Amount/sum(Amount)*100) %>%
+      department_proportion_pie_chart(labels="Name", values="Amount", source="pie")
+  })
+  
+  output$tab1_table1 <- renderDataTable({
+    tab1_annual_subset() %>% 
+      mutate(Amount = scales::dollar(Amount)) %>%
+      head(5)
+  },
+  options = list(dom = 't',
+                 paging=F,
+                 ordering=F,
+                 searching=F,
+                 processing=F))
+  
+  output$tab1_table2 <- renderDataTable({
+    tab1_annual_subset() %>% 
+      arrange(Amount) %>%
+      mutate(Amount = scales::dollar(Amount)) %>%
+      head(5)
+  },
+  options = list(dom = 't',
+                 paging=F,
+                 ordering=F,
+                 searching=F,
+                 processing=F))
+  
+  output$tab2_piechart <- renderPlotly({
+    annual %>%
+      filter(year <= input$pie_bar_year[2] & year >= input$pie_bar_year[1] & !is.na(code)) %>%
+      arrange(desc(amount)) %>%
+      mutate(percentage=amount/sum(amount)*100) %>%
+      department_proportion_pie_chart(labels="name", source="pie")
+  })
+  
+  observeEvent(event_data("plotly_click", source = "pie"), {
+    click_data <- event_data("plotly_click", source = "pie")
+    dept_reactive(click_data$customdata[[1]])
+    print(dept_reactive())
+  })
+  
+  output$tab2_barchart <- renderPlot({
+    dept_subset() %>%
+      filter(dept_reactive() == department_name) %>%
+      group_by(name) %>%
+      summarise(total_expenditure = sum(amount)) %>%
+      arrange(desc(total_expenditure)) %>%
+      category_expend_bar_chart(dept_reactive())
+  })
+  
+  output$tab1_trend <- renderPlotly({
+    ggplotly(annual %>% 
+               filter(is.na(code)) %>%
+               ggplot(aes(x=year, y=amount)) +
+               geom_line() +
+               geom_point() +
+               labs(x="Year", y="Expenditure (dollars)") +
+               scale_x_continuous(limits = c(2007, 2023),
+                                  breaks = seq(2008, 2023, by = 1)) +
+               scale_y_continuous(expand = c(0, 0, 0.1, 0.1),
+                                  limits = c(0, NA),
+                                  labels = scales::comma) +
+               theme_bw()
+    )
+  })
+  
+  output$plot1 <- renderPlotly({
+    annual_temp = annual %>% filter(name == input$departmentVal)
+    depat %>% 
+      filter(department_name == input$departmentVal & !is.na(code)) %>%
+      stacked_trend_bar_chart(annual_temp, title=input$departmentVal)
+  })
+  
+  output$plot2 <- renderPlotly({
+    comparison_plot(tab3_annual_subset(), "amount", "Expenditure ($)", scales::number_format(scale = 1e-6, suffix = "M"))
+  })
+  
+  output$plot3 <- renderPlotly({
+    comparison_plot(tab3_annual_subset(), "percentage", "% of year budget", scales::percent) 
+  })
+  
+  output$treemap <- renderPlot({
+    ggplot(dept_subset(), aes(area = amount, fill = name, subgroup = department_name)) +
+      geom_treemap() +
+      geom_treemap_subgroup_border(color = "white") +
+      geom_treemap_subgroup_text(place = "centre", grow = T, reflow = T, size=6) +
+      labs(fill='Category') +
+      scale_fill_manual(values = mycolors)
+  })
+  
+}
+
+# Full sized window because pie chart scaling issues
+runGadget(ui, server, viewer = browserViewer(browser = getOption("browser")))

@@ -1,0 +1,76 @@
+---
+title: "Untitled"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r}
+knitr::opts_chunk$set(warnings = FALSE, message = FALSE)
+library(tidyr)
+library(dplyr)
+```
+
+[Pokemon]  This problem gives practice in deriving new variables to improve a
+faceted plot. The data below give attack and defense statistics for Pokemon,
+along with their types. We will build a visualization to answer the question --
+how do the different types of Pokemon vary in their attack and defense
+potential?
+
+```{r}
+pokemon <- read.csv("https://uwmadison.box.com/shared/static/hf5cmx3ew3ch0v6t0c2x56838er1lt2c.csv")
+head(pokemon)
+```
+    
+a. Derive a new column containing the attack-to-defense ratio, defined as
+$\frac{\text{Attack}}{\text{Defense}}$.
+```{r}
+library(ggplot2)
+pokemon <- pokemon%>%
+  mutate(attack_to_defense = Attack/Defense) 
+  
+```
+
+b. For each `type_1` group of Pokemon, compute the median attack-to-defense
+ratio.
+```{r}
+pokemon %>%
+  group_by(type_1) %>%
+  summarise(attack_to_defense=mean(attack_to_defense)) %>%
+  arrange(attack_to_defense) %>%
+  pull(type_1)
+```
+
+c. Plot the attack vs. defense scores for each Pokemon, faceted by `type_1`. Use
+the result of (b) to ensure that the panels are sorted from types with highest
+to lowest attack-to-defense ratio.
+```{r}
+ggplot(pokemon)+
+  facet_wrap(~reorder(type_1, attack_to_defense, median)) +
+  geom_point(aes(Attack,Defense)) +
+  stat_smooth(aes(Attack,Defense, method = "lm"))
+```
+```{r}
+pokemon
+ggplot(pokemon,aes(Attack,Defense))+
+  facet_wrap(~tpye_1) +
+  geom_point(aes(col = HP),alpha= 0.6) +
+  stat_smooth(method = "lm", col="black")+
+  scale_color_gradient2()
+
+```
+
+d. Propose, but do not implement, a visualization of this dataset that makes use
+of dynamic queries. What questions would the visualization answer? What would be
+the structure of interaction, and how would the display update when the user
+provides a cue?
+```{r}
+
+```
+
+```{r}
+ikea <- read.csv("https://uwmadison.box.com/shared/static/iat31h1wjg7abhd2889cput7k264bdzd.csv") %>%
+          filter(category %in% c("Tables", "Bookcases", "Beds", "Cabinets", "Sofas", "Wardrobes"))
+ggplot(ikea) +
+  geom_histogram(aes(log(price)))
+```
+

@@ -1,0 +1,63 @@
+---
+title: "milestone 3"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(plotly)
+library(treemapify)
+budgets = read_csv("bydept.csv")
+```
+
+```{r}
+budgets_by_area = budgets %>%
+  drop_na() %>%
+  group_by(year)
+
+budgets433 = budgets_by_area %>%
+  filter(department == 433) %>%
+  mutate(proportion = amount / sum(amount, na.rm=TRUE))
+```
+```{r}
+budgets433 %>% ggplot() +
+  geom_tile(aes(x = year, y = name, fill=proportion)) +
+  scale_x_continuous(expand = c(0, 0, 0, 0)) +
+  theme(
+    axis.ticks = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank()
+  ) +
+  labs(y = "")
+```
+
+```{r}
+budgetstotal = read_csv("annual.csv")
+budgetstotal = budgetstotal %>%
+  drop_na() %>%
+  group_by(year) %>%
+  mutate(proportion = amount / sum(amount, na.rm=TRUE))
+```
+
+```{r, fig.height=10, fig.width = 6}
+budgetstotal %>% ggplot() +
+  geom_tile(aes(x = year, y = name, fill=proportion)) +
+  scale_x_continuous(expand = c(0, 0, 0, 0)) +
+  theme(
+    axis.ticks = element_blank(),
+    panel.grid.major.y = element_blank(),
+    panel.grid.major.x = element_blank(),
+  ) +
+  scale_fill_gradient(name = "fill", trans = "log", guide="none", low="yellow", high="red") +
+  labs(y = "")
+```
+```{r}
+budgets2008 = budgets_by_area %>% filter(
+  year == 2008
+) %>% drop_na()
+ggplot(budgets2008, aes(area = amount, fill = name, subgroup = department)) +
+  geom_treemap() +
+  geom_treemap_subgroup_border() +
+  geom_treemap_subgroup_text(place = "centre")
+```
